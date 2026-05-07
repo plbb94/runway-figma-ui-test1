@@ -77,7 +77,7 @@
     
     <img id="preview" class="preview" />
     
-    <textarea id="prompt" placeholder="输入提示词（可选），比如：让这个画面动起来，自然流畅"></textarea>
+    <textarea id="prompt" placeholder="输入提示词（可选），比如：让这个画面动起来，自然流畅，光线柔和"></textarea>
     
     <button id="getImageBtn">1. 先选中Figma图片，点这里获取</button>
     <button id="generateBtn" disabled>2. 生成视频（需要1-3分钟）</button>
@@ -88,7 +88,6 @@
   <script>
     // 替换成你的代理服务器地址！
     const PROXY_URL = 'https://runway-figma-proxy-test1.vercel.app/api/runway-proxy';
-    const RUNWAY_API_KEY = ''; // 留空，密钥在服务器端
     
     let currentImageUrl = null;
     
@@ -129,10 +128,9 @@
       
       generateBtn.disabled = true;
       getImageBtn.disabled = true;
-      showStatus('正在提交生成请求...', 'loading');
+      showStatus('正在生成视频，请耐心等待1-3分钟...', 'loading');
       
       try {
-        // 第一步：提交生成任务
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -145,55 +143,19 @@
         const data = await response.json();
         
         if (!response.ok) {
-          throw new Error(data.error || data.message || '提交失败');
-        }
-        
-        const taskId = data.taskId;
-        showStatus('视频正在生成中，请耐心等待1-3分钟...', 'loading');
-        
-        // 第二步：轮询任务状态
-        let videoUrl = null;
-        let attempts = 0;
-        const maxAttempts = 60; // 最多轮询3分钟
-        
-        while (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          attempts++;
-          
-          const statusResponse = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.RUNWAY_API_KEY}`,
-              'X-Runway-Version': '2024-11-06'
-            }
-          });
-          
-          const statusData = await statusResponse.json();
-          
-          if (statusData.status === 'SUCCEEDED') {
-            videoUrl = statusData.output[0];
-            break;
-          }
-          
-          if (statusData.status === 'FAILED') {
-            throw new Error('视频生成失败：' + (statusData.error?.message || '未知错误'));
-          }
-        }
-        
-        if (!videoUrl) {
-          throw new Error('生成超时，请稍后再试');
+          throw new Error(data.error?.message || data.error || '生成失败');
         }
         
         showStatus('视频生成成功！正在打开...', 'success');
         
         // 把视频地址发给Figma
-        parent.postMessage({ pluginMessage: { type: 'insert-video', videoUrl } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'insert-video', videoUrl: data.videoUrl } }, '*');
         
         // 同时在新标签页打开视频
-        window.open(videoUrl, '_blank');
+        window.open(data.videoUrl, '_blank');
         
       } catch (error) {
         showStatus('错误：' + error.message, 'error');
-        console.error(error);
       } finally {
         generateBtn.disabled = false;
         getImageBtn.disabled = false;
